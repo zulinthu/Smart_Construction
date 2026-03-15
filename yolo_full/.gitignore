@@ -1,0 +1,129 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虚拟环境
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# 模型和数据
+models/yolov5/
+models/weights/*.pt
+!models/weights/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# 结果
+results/experiments/*
+!results/experiments/.gitkeep
+results/images/*
+!results/images/.gitkeep
+results/videos/*
+!results/videos/.gitkeep
+results/logs/*
+!results/logs/.gitkeep
+results/statistics/*
+!results/statistics/.gitkeep
+
+# 日志
+*.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+.cache/
+
+# 备份文件
+backup_*.tar.gz
+*.zip
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# 文档
+docs/build/
+site/
+
+# 环境变量
+.env
+.env.local
+
+# 数据库
+*.db
+*.sqlite3
+
+# 其他
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+
+
+
+
+
+
+
+
+
