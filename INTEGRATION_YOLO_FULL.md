@@ -21,3 +21,4 @@
 
 - This integration keeps the original `Smart_Construction` code unchanged and adds the full migrated project in parallel.
 - Use `yolo_full/` when you want the complete migrated capability set.
+- `detect.py` and `detect_visual.py` are now wired to use `yolo_full` detector runtime.

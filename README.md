@@ -8,6 +8,23 @@
 
 该项目是使用 `YOLOv5 v2.x` 的程序来训练在智能工地安全领域中头盔目标检测的应用
 
+## 新版能力接入（yolo_full）
+
+仓库已集成完整迁移版能力到 `./yolo_full`，并且以下入口已切换为调用迁移版检测器：
+
+- `python detect.py`
+- `python visual_interface.py`
+
+快速使用：
+
+```bash
+pip install -r requirements.txt
+python detect.py --source inference/images
+python visual_interface.py
+```
+
+集成说明见：`INTEGRATION_YOLO_FULL.md`
+
 ## 可视化界面演示（2021.3 上新！）：
 :boom::boom::boom:新增可视化界面上线啦！！！！来一波演示！！！:boom::boom::boom:
 使用文档: [如何使用可视化工具](./doc/Visualize_Tool_Tutorial.md)

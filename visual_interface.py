@@ -456,13 +456,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    weight_root = Path.cwd().joinpath("weights")
-    if not weight_root.exists():
-        raise FileNotFoundError("weights not found !!!")
+    root_dir = Path(__file__).resolve().parent
+    preferred_weight_dirs = [
+        root_dir.joinpath("weights"),
+        root_dir.joinpath("yolo_full", "models", "weights"),
+    ]
+    weight_file = []
+    for weight_dir in preferred_weight_dirs:
+        if weight_dir.exists():
+            weight_file = [item for item in weight_dir.iterdir() if item.suffix == ".pt"]
+            if weight_file:
+                break
+    if not weight_file:
+        raise FileNotFoundError(
+            "No .pt weights found in ./weights or ./yolo_full/models/weights"
+        )
 
-    weight_file = [item for item in weight_root.iterdir() if item.suffix == ".pt"]
     weight_root = [str(weight_file[0])]  # 权重文件位置
-    out_file_root = Path.cwd().joinpath(r'inference/output')
+    out_file_root = root_dir.joinpath(r'inference/output')
     out_file_root.parent.mkdir(exist_ok=True)
     out_file_root.mkdir(exist_ok=True)
 
