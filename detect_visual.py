@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import cv2
+import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 
@@ -35,19 +36,25 @@ class YOLOPredict(object):
         if img is None or img.size == 0:
             return
 
+        target_w = max(1, image_label.width())
+        target_h = max(1, image_label.height())
+
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        height, width = img_rgb.shape[:2]
-        q_image = QImage(img_rgb.data, width, height, width * 3, QImage.Format_RGB888)
+        src_h, src_w = img_rgb.shape[:2]
+        scale = min(target_w / max(1, src_w), target_h / max(1, src_h))
+        new_w = max(1, int(src_w * scale))
+        new_h = max(1, int(src_h * scale))
+        interp = cv2.INTER_LINEAR if scale >= 1.0 else cv2.INTER_AREA
+        resized = cv2.resize(img_rgb, (new_w, new_h), interpolation=interp)
+
+        # Use a fixed-size canvas to avoid QLabel size-hint feedback loops.
+        canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+        x0 = (target_w - new_w) // 2
+        y0 = (target_h - new_h) // 2
+        canvas[y0:y0 + new_h, x0:x0 + new_w] = resized
+
+        q_image = QImage(canvas.data, target_w, target_h, target_w * 3, QImage.Format_RGB888).copy()
         pixmap = QPixmap.fromImage(q_image)
-
-        target_size = image_label.size()
-        if target_size.width() > 0 and target_size.height() > 0:
-            pixmap = pixmap.scaled(
-                target_size,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation,
-            )
-
         image_label.setAlignment(Qt.AlignCenter)
         image_label.setPixmap(pixmap)
 

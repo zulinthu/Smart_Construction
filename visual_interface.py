@@ -31,7 +31,7 @@ import cv2
 from GPUtil import GPUtil
 from PyQt5.QtCore import QThread, pyqtSignal, QUrl, pyqtSlot, QTimer, QDateTime, Qt
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QPushButton
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QPushButton, QSizePolicy
 from PyQt5.QtGui import QColor, QBrush, QIcon, QPixmap
 from PyQt5.QtChart import QDateTimeAxis, QValueAxis, QSplineSeries, QChart
 import torch
@@ -141,6 +141,8 @@ class PredictHandlerThread(QThread):
         # 创建显示进程
         self.predict_data_handler_thread = PredictDataHandlerThread(self.predict_model)
         self.predict_data_handler_thread.predict_message_trigger.connect(self.add_messages)
+        self.preview_emit_interval = 1.0 / 20.0
+        self._last_preview_emit_ts = 0.0
 
     def __del__(self):
         self.running = False
@@ -175,6 +177,10 @@ class PredictHandlerThread(QThread):
         self.predict_data_handler_thread.running = False
 
     def _emit_preview(self, frame, annotated):
+        now = time.time()
+        if now - self._last_preview_emit_ts < self.preview_emit_interval:
+            return
+        self._last_preview_emit_ts = now
         self.preview_frame_trigger.emit(frame, annotated)
 
     @pyqtSlot(str)
@@ -281,6 +287,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.real_time_checkBox.stateChanged.connect(self.real_time_checkbox_state_changed)
         self.real_time_checkBox.setChecked(real_time_show_predict_flag)
         self.real_time_check_state = self.real_time_checkBox.isChecked()
+        self._last_preview_render_ts = 0.0
+        self.preview_render_interval = 1.0 / 20.0
 
         # Model selector button (runtime switchable .pt weights)
         self.select_model_pushButton = QPushButton("Select Model")
@@ -315,6 +323,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 设置显示图片的 label 为黑色背景
         self.input_real_time_label.setStyleSheet("QLabel{background:black}")
         self.output_real_time_label.setStyleSheet("QLabel{background:black}")
+        self.input_real_time_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.output_real_time_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
     def real_time_checkbox_state_changed(self):
         """
@@ -363,8 +373,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(object, object)
     def on_preview_frame(self, frame, annotated):
         # Ensure all widget updates happen on UI thread.
-        self.input_media_tabWidget.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
-        self.output_media_tabWidget.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
+        now = time.time()
+        if now - self._last_preview_render_ts < self.preview_render_interval:
+            return
+        self._last_preview_render_ts = now
+        if self.input_media_tabWidget.currentIndex() != REAL_TIME_PREDICT_TAB_INDEX:
+            self.input_media_tabWidget.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
+        if self.output_media_tabWidget.currentIndex() != REAL_TIME_PREDICT_TAB_INDEX:
+            self.output_media_tabWidget.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
         YOLOPredict.show_real_time_image(self.input_real_time_label, frame)
         YOLOPredict.show_real_time_image(self.output_real_time_label, annotated)
 
