@@ -171,7 +171,7 @@ class PredictHandlerThread(QThread):
             self.result_ready_trigger.emit(self.parameter_source, self.output_predict_file, image_flag)
         else:
             if not str(self.predict_model.predict_info).startswith("ERROR"):
-                self.predict_model.predict_info = "ERROR ????????????/???????????"
+                self.predict_model.predict_info = "ERROR 推理失败或输出文件为空。"
         self.predict_data_handler_thread.running = False
 
     def _emit_preview(self, frame, annotated):

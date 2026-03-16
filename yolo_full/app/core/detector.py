@@ -89,8 +89,11 @@ class HelmetDetector:
 
         candidates = [
             Path("C:/Windows/Fonts/msyh.ttc"),
-            Path("C:/Windows/Fonts/simhei.ttf"),
             Path("C:/Windows/Fonts/msyhbd.ttc"),
+            Path("C:/Windows/Fonts/simhei.ttf"),
+            Path("C:/Windows/Fonts/simsun.ttc"),
+            Path("C:/Windows/Fonts/simkai.ttf"),
+            Path("C:/Windows/Fonts/Deng.ttf"),
         ]
         for font_path in candidates:
             if font_path.exists():
@@ -99,13 +102,22 @@ class HelmetDetector:
                 except Exception:
                     continue
 
-        try:
-            return ImageFont.load_default()
-        except Exception:
-            return None
+        return None
+
+    @staticmethod
+    def _ascii_fallback_label(label: str) -> str:
+        return (
+            str(label)
+            .replace("\u672a\u4f69\u6234\u5b89\u5168\u5e3d", "no_helmet")
+            .replace("\u4f69\u6234\u5b89\u5168\u5e3d", "wearing_helmet")
+            .replace("\u4eba\u5458", "person")
+        )
 
     def _draw_label(self, image, bbox, label, color):
         x1, y1 = int(bbox[0]), int(bbox[1])
+
+        if self._contains_non_ascii(label) and (not _PIL_AVAILABLE or self._label_font is None):
+            label = self._ascii_fallback_label(label)
 
         if self._contains_non_ascii(label) and _PIL_AVAILABLE and self._label_font is not None:
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -485,27 +497,7 @@ class HelmetDetector:
             label = f"{label_zh}: {confidence:.2f}"
 
             # 绘制标签背景
-            (label_w, label_h), _ = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1
-            )
-            cv2.rectangle(
-                image,
-                (bbox[0], bbox[1] - label_h - 10),
-                (bbox[0] + label_w, bbox[1]),
-                color,
-                -1,
-            )
-
-            # 绘制标签文本
-            cv2.putText(
-                image,
-                label,
-                (bbox[0], bbox[1] - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (255, 255, 255),
-                1,
-            )
+            image = self._draw_label(image, bbox, label, color)
 
         # 在图像顶部绘制统计信息
         info_text = (
