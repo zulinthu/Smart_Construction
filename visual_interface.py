@@ -215,8 +215,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, weight_path, out_file_path, real_time_show_predict_flag: bool, parent=None):
         super(MainWindow, self).__init__(parent)
         self.setupUi(self)
-        self.setWindowTitle("Intelligent Monitoring System of Construction Site Software " + CODE_VER)
+        self.setWindowTitle("Intelligent Monitoring System of Construction Site Software")
         self.showMaximized()
+        if hasattr(self, "author_label"):
+            self.author_label.hide()
+            self.author_label.setMaximumHeight(0)
 
         '''按键绑定'''
         # 输入媒体
