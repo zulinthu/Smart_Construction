@@ -108,6 +108,9 @@ class PredictHandlerThread(QThread):
     进行模型推理的线程
     """
 
+    preview_frame_trigger = pyqtSignal(object, object)
+    result_ready_trigger = pyqtSignal(str, str, bool)
+
     def __init__(self, input_player, output_player, out_file_path, weight_path,
                  predict_info_plain_text_edit, predict_progress_bar, fps_label,
                  button_dict, input_tab, output_tab, input_image_label, output_image_label,
@@ -145,30 +148,18 @@ class PredictHandlerThread(QThread):
 
     def run(self):
         self.running = True
+        self.output_predict_file = ""
         if not self.predict_data_handler_thread.isRunning():
             self.predict_data_handler_thread.start()
 
-        self.predict_progressBar.setValue(0)  # 进度条清零
-        for item, button in self.button_dict.items():
-            button.setEnabled(False)
-
         image_flag = os.path.splitext(self.parameter_source)[-1].lower() in IMG_FORMATS
-        qt_input = None
-        qt_output = None
-
-        if not image_flag and self.real_time_show_predict_flag:
-            qt_input = self.input_image_label
-            qt_output = self.output_image_label
-            # tab 设置显示第二栏
-            self.input_tab.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
-            self.output_tab.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
+        frame_callback = self._emit_preview if (not image_flag and self.real_time_show_predict_flag) else None
 
         try:
             with torch.no_grad():
                 self.output_predict_file = self.predict_model.detect(
                     self.parameter_source,
-                    qt_input=qt_input,
-                    qt_output=qt_output,
+                    frame_callback=frame_callback,
                 )
         except Exception as e:
             self.output_predict_file = ""
@@ -177,31 +168,14 @@ class PredictHandlerThread(QThread):
             self.running = False
 
         if self.output_predict_file != "" and Path(self.output_predict_file).exists():
-            # 将 str 路径转为 QUrl 并显示
-            self.input_player.setMedia(QMediaContent(QUrl.fromLocalFile(self.parameter_source)))  # 选取视频文件
-            self.input_player.pause()  # 显示媒体
-
-            self.output_player.setMedia(QMediaContent(QUrl.fromLocalFile(self.output_predict_file)))  # 选取视频文件
-            self.output_player.pause()  # 显示媒体
-
-            # tab 设置显示第一栏
-            self.input_tab.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
-            self.output_tab.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
-
+            self.result_ready_trigger.emit(self.parameter_source, self.output_predict_file, image_flag)
         else:
             if not str(self.predict_model.predict_info).startswith("ERROR"):
-                self.predict_model.predict_info = "ERROR 推理失败，请检查视频路径/格式或查看控制台报错。"
+                self.predict_model.predict_info = "ERROR ????????????/???????????"
+        self.predict_data_handler_thread.running = False
 
-        # video_flag = os.path.splitext(self.parameter_source)[-1].lower() in vid_formats
-        for item, button in self.button_dict.items():
-            if item in ["play_pushButton", "pause_pushButton"]:
-                button.setEnabled((not image_flag) and (self.output_predict_file != ""))
-                continue
-            if item == "open_predict_file_pushButton":
-                button.setEnabled(self.output_predict_file != "")
-                continue
-            button.setEnabled(True)
-        # self.predict_data_handler_thread.running = False
+    def _emit_preview(self, frame, annotated):
+        self.preview_frame_trigger.emit(frame, annotated)
 
     @pyqtSlot(str)
     def add_messages(self, message):
@@ -292,6 +266,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                                                            self.output_real_time_label,
                                                            real_time_show_predict_flag
                                                            )
+        self.predict_handler_thread.preview_frame_trigger.connect(self.on_preview_frame)
+        self.predict_handler_thread.result_ready_trigger.connect(self.on_predict_result_ready)
+        self.predict_handler_thread.finished.connect(self.on_predict_thread_finished)
         self.weight_label.setText(f" Using weight : ****** {Path(weight_path[0]).name} ******")
         # 界面美化
         self.gen_better_gui()
@@ -338,6 +315,46 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.real_time_check_state = self.real_time_checkBox.isChecked()
         self.predict_handler_thread.real_time_show_predict_flag = self.real_time_check_state
+
+
+    def _set_buttons_after_predict(self, image_flag: bool, has_output: bool):
+        for item, button in self.button_dict.items():
+            if item in ["play_pushButton", "pause_pushButton"]:
+                button.setEnabled((not image_flag) and has_output)
+                continue
+            if item == "open_predict_file_pushButton":
+                button.setEnabled(has_output)
+                continue
+            button.setEnabled(True)
+
+    @pyqtSlot(object, object)
+    def on_preview_frame(self, frame, annotated):
+        # Ensure all widget updates happen on UI thread.
+        self.input_media_tabWidget.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
+        self.output_media_tabWidget.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
+        YOLOPredict.show_real_time_image(self.input_real_time_label, frame)
+        YOLOPredict.show_real_time_image(self.output_real_time_label, annotated)
+
+    @pyqtSlot(str, str, bool)
+    def on_predict_result_ready(self, source_path: str, output_path: str, image_flag: bool):
+        self.input_player.setMedia(QMediaContent(QUrl.fromLocalFile(source_path)))
+        self.input_player.pause()
+        self.output_player.setMedia(QMediaContent(QUrl.fromLocalFile(output_path)))
+        self.output_player.pause()
+        self.input_media_tabWidget.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
+        self.output_media_tabWidget.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
+        self._set_buttons_after_predict(image_flag, True)
+
+    @pyqtSlot()
+    def on_predict_thread_finished(self):
+        source = self.predict_handler_thread.parameter_source
+        image_flag = os.path.splitext(source)[-1].lower() in IMG_FORMATS if source else True
+        has_output = bool(
+            self.predict_handler_thread.output_predict_file
+            and Path(self.predict_handler_thread.output_predict_file).exists()
+        )
+        if not has_output:
+            self._set_buttons_after_predict(image_flag, False)
 
     def chart_init(self):
         """
@@ -472,6 +489,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.predict_info_plainTextEdit.appendPlainText("INFO 正在推理中，请稍候。")
             return
 
+        self.predict_progressBar.setValue(0)
+        for _, button in self.button_dict.items():
+            button.setEnabled(False)
         self.predict_info_plainTextEdit.appendPlainText(f"Start: {source}")
         # 启动线程去调用
         self.predict_handler_thread.start()

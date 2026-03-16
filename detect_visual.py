@@ -48,7 +48,7 @@ class YOLOPredict(object):
         )
         image_label.setPixmap(QPixmap(image))
 
-    def detect(self, source, save_img=False, qt_input=None, qt_output=None):
+    def detect(self, source, save_img=False, qt_input=None, qt_output=None, frame_callback=None):
         output_dir = Path(self.output)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -74,7 +74,10 @@ class YOLOPredict(object):
             for idx, total, frame, annotated, fps in runner.run_video(source, save_img=True):
                 infer_t = (1.0 / fps) if fps > 0 else 0
                 self.predict_info = f"video [{idx}/{total}] Done. ({infer_t:.3f}s)"
-                if qt_input is not None and qt_output is not None:
+                if frame_callback is not None:
+                    frame_callback(frame, annotated)
+                elif qt_input is not None and qt_output is not None:
+                    # Backward compatibility for legacy callers
                     self.show_real_time_image(qt_input, frame)
                     self.show_real_time_image(qt_output, annotated)
             self.predict_info = "Done."
@@ -88,7 +91,10 @@ class YOLOPredict(object):
             ):
                 infer_t = (1.0 / fps) if fps > 0 else 0
                 self.predict_info = f"video [{idx}/{idx + 1}] Done. ({infer_t:.3f}s)"
-                if qt_input is not None and qt_output is not None:
+                if frame_callback is not None:
+                    frame_callback(frame, annotated)
+                elif qt_input is not None and qt_output is not None:
+                    # Backward compatibility for legacy callers
                     self.show_real_time_image(qt_input, frame)
                     self.show_real_time_image(qt_output, annotated)
             self.predict_info = "Done."
