@@ -140,7 +140,9 @@ class PredictHandlerThread(QThread):
         # self.destroyed()
 
     def run(self):
-        self.predict_data_handler_thread.start()
+        self.running = True
+        if not self.predict_data_handler_thread.isRunning():
+            self.predict_data_handler_thread.start()
 
         self.predict_progressBar.setValue(0)  # 进度条清零
         for item, button in self.button_dict.items():
@@ -157,12 +159,20 @@ class PredictHandlerThread(QThread):
             self.input_tab.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
             self.output_tab.setCurrentIndex(REAL_TIME_PREDICT_TAB_INDEX)
 
-        with torch.no_grad():
-            self.output_predict_file = self.predict_model.detect(self.parameter_source,
-                                                                 qt_input=qt_input,
-                                                                 qt_output=qt_output)
+        try:
+            with torch.no_grad():
+                self.output_predict_file = self.predict_model.detect(
+                    self.parameter_source,
+                    qt_input=qt_input,
+                    qt_output=qt_output,
+                )
+        except Exception as e:
+            self.output_predict_file = ""
+            self.predict_model.predict_info = f"ERROR {e}"
+        finally:
+            self.running = False
 
-        if self.output_predict_file != "":
+        if self.output_predict_file != "" and Path(self.output_predict_file).exists():
             # 将 str 路径转为 QUrl 并显示
             self.input_player.setMedia(QMediaContent(QUrl.fromLocalFile(self.parameter_source)))  # 选取视频文件
             self.input_player.pause()  # 显示媒体
@@ -174,11 +184,18 @@ class PredictHandlerThread(QThread):
             self.input_tab.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
             self.output_tab.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
 
-            # video_flag = os.path.splitext(self.parameter_source)[-1].lower() in vid_formats
-            for item, button in self.button_dict.items():
-                if image_flag and item in ['play_pushButton', 'pause_pushButton']:
-                    continue
-                button.setEnabled(True)
+        else:
+            self.predict_model.predict_info = "ERROR 推理失败，请检查视频路径/格式或查看控制台报错。"
+
+        # video_flag = os.path.splitext(self.parameter_source)[-1].lower() in vid_formats
+        for item, button in self.button_dict.items():
+            if item in ["play_pushButton", "pause_pushButton"]:
+                button.setEnabled((not image_flag) and (self.output_predict_file != ""))
+                continue
+            if item == "open_predict_file_pushButton":
+                button.setEnabled(self.output_predict_file != "")
+                continue
+            button.setEnabled(True)
         # self.predict_data_handler_thread.running = False
 
     @pyqtSlot(str)
@@ -186,24 +203,27 @@ class PredictHandlerThread(QThread):
         if message != "":
             self.predict_info_plainTextEdit.appendPlainText(message)
 
-            if ":" not in message:
-                # 跳过无用字符
-                return
-
             split_message = message.split(" ")
 
             # 设置进度条
-            if "video" in message:
-                percent = split_message[2][1:-1].split("/")  # 提取图片的序号
-                value = int((int(percent[0]) / int(percent[1])) * 100)
-                value = value if (int(percent[1]) - int(percent[0])) > 2 else 100
-                self.predict_progressBar.setValue(value)
-            else:
+            if "video [" in message:
+                try:
+                    percent = split_message[1][1:-1].split("/")  # 提取帧序号
+                    value = int((int(percent[0]) / int(percent[1])) * 100)
+                    value = value if (int(percent[1]) - int(percent[0])) > 2 else 100
+                    self.predict_progressBar.setValue(value)
+                except Exception:
+                    pass
+            elif "image Done." in message:
                 self.predict_progressBar.setValue(100)
 
             # 设置 FPS
-            second_count = 1 / float(split_message[-1][1:-2])
-            self.fps_label.setText(f"--> {second_count:.1f} FPS")
+            if message.endswith("s)") and "(" in message:
+                try:
+                    second_count = 1 / float(split_message[-1][1:-2])
+                    self.fps_label.setText(f"--> {second_count:.1f} FPS")
+                except Exception:
+                    pass
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -372,7 +392,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 对 y 赋值
         # yint = random.randint(0, 100)
         gpu_info = get_gpu_info()
-        yint = gpu_info[0].get("gpu_load")
+        yint = gpu_info[0].get("gpu_load") if gpu_info else 0
         # 添加数据到曲线末端
         self.series.append(time_current.toMSecsSinceEpoch(), yint)
 
@@ -381,15 +401,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         导入媒体文件
         :return:
         """
-        self.media_source = QFileDialog.getOpenFileUrl()[0]
-        self.input_player.setMedia(QMediaContent(self.media_source))  # 选取视频文件
+        selected_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select media file",
+            str(Path.home()),
+            "Media Files (*.mp4 *.avi *.mov *.mkv *.wmv *.flv *.m4v *.jpg *.jpeg *.png *.bmp *.webp);;All Files (*.*)",
+        )
+        if not selected_file:
+            return
+
+        local_path = str(Path(selected_file).resolve())
+        if not Path(local_path).exists():
+            self.predict_info_plainTextEdit.appendPlainText(f"ERROR File not found: {local_path}")
+            return
+
+        self.media_source = local_path
+        self.input_player.setMedia(QMediaContent(QUrl.fromLocalFile(local_path)))  # 选取视频文件
 
         # 设置 output 为一张图片，防止资源被占用
-        path_current = str(Path.cwd().joinpath("area_dangerous\1.jpg"))
-        self.output_player.setMedia(QMediaContent(QUrl.fromLocalFile(path_current)))
+        path_current = Path(__file__).resolve().parent.joinpath("area_dangerous", "1.jpg")
+        if path_current.exists():
+            self.output_player.setMedia(QMediaContent(QUrl.fromLocalFile(str(path_current))))
+        else:
+            self.output_player.setMedia(QMediaContent())
 
-        # 将 QUrl 路径转为 本地路径str
-        self.predict_handler_thread.parameter_source = self.media_source.toLocalFile()
+        # 将路径传给推理线程
+        self.predict_handler_thread.parameter_source = local_path
         self.input_player.pause()  # 显示媒体
 
         image_flag = os.path.splitext(self.predict_handler_thread.parameter_source)[-1].lower() in img_formats
@@ -398,6 +435,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 button.setEnabled(False)
             else:
                 button.setEnabled(True)
+        self.predict_info_plainTextEdit.appendPlainText(f"Loaded: {local_path}")
         # self.output_player.setMedia(QMediaContent(QFileDialog.getOpenFileUrl()[0]))  # 选取视频文件
 
     def predict_button_click(self):
@@ -405,6 +443,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         推理按钮
         :return:
         """
+        source = self.predict_handler_thread.parameter_source
+        if not source:
+            self.predict_info_plainTextEdit.appendPlainText("ERROR 请先导入视频或图片。")
+            return
+        if not Path(source).exists():
+            self.predict_info_plainTextEdit.appendPlainText(f"ERROR 文件不存在: {source}")
+            return
+        if self.predict_handler_thread.isRunning():
+            self.predict_info_plainTextEdit.appendPlainText("INFO 正在推理中，请稍候。")
+            return
+
+        self.predict_info_plainTextEdit.appendPlainText(f"Start: {source}")
         # 启动线程去调用
         self.predict_handler_thread.start()
 
@@ -426,7 +476,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         name = self.sender().objectName()
 
-        if self.media_source == "":
+        if not self.media_source:
             return
 
         if name == "play_pushButton":
@@ -440,7 +490,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def open_file_in_browser(self):
-        os.system(f"start explorer {self.out_file_path}")
+        os.system(f'start explorer "{self.out_file_path}"')
 
     @pyqtSlot()
     def closeEvent(self, *args, **kwargs):
@@ -457,6 +507,7 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
 
     root_dir = Path(__file__).resolve().parent
+    os.chdir(root_dir)
     preferred_weight_dirs = [
         root_dir.joinpath("weights"),
         root_dir.joinpath("yolo_full", "models", "weights"),
