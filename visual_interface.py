@@ -234,13 +234,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 输出媒体
         self.open_predict_file_pushButton.clicked.connect(self.open_file_in_browser)  # 文件中显示推理视频
         # 下方
-        self.play_pushButton.clicked.connect(self.play_pause_button_click)  # 播放
-        self.pause_pushButton.clicked.connect(self.play_pause_button_click)  # 暂停
+        self.pause_pushButton.clicked.connect(self.pause_resume_button_click)  # Pause/Resume
         self.button_dict = dict()
         self.button_dict.update({"import_media_pushButton": self.import_media_pushButton,
                                  "start_predict_pushButton": self.start_predict_pushButton,
                                  "open_predict_file_pushButton": self.open_predict_file_pushButton,
-                                 "play_pushButton": self.play_pushButton,
                                  "pause_pushButton": self.pause_pushButton,
                                  "real_time_checkBox": self.real_time_checkBox
                                  })
@@ -312,15 +310,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         美化界面
         :return:
         """
-        # Play 按钮
-        play_icon = QIcon()
-        play_icon.addPixmap(QPixmap("./UI/icon/play.png"), QIcon.Normal, QIcon.Off)
-        self.play_pushButton.setIcon(play_icon)
+        # Keep a single Pause/Resume button for detection control.
+        self.play_pushButton.hide()
+        self.play_pushButton.setEnabled(False)
 
-        # Pause 按钮
+        # Pause button
         play_icon = QIcon()
         play_icon.addPixmap(QPixmap("./UI/icon/pause.png"), QIcon.Normal, QIcon.Off)
         self.pause_pushButton.setIcon(play_icon)
+        self.pause_pushButton.setText("Pause")
 
         # 隐藏 tab 标题栏
         self.input_media_tabWidget.tabBar().hide()
@@ -371,8 +369,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _set_buttons_after_predict(self, image_flag: bool, has_output: bool):
         for item, button in self.button_dict.items():
-            if item in ["play_pushButton", "pause_pushButton"]:
-                button.setEnabled((not image_flag) and has_output)
+            if item == "pause_pushButton":
+                button.setEnabled(False)
+                button.setText("Pause")
                 continue
             if item == "open_predict_file_pushButton":
                 button.setEnabled(has_output)
@@ -490,6 +489,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not selected_file:
             return
 
+        is_running = self.predict_handler_thread.isRunning()
+        if is_running:
+            self.predict_info_plainTextEdit.appendPlainText(
+                "INFO Detection is running. New media is loaded for the next run."
+            )
+
         local_path = str(Path(selected_file).resolve())
         if not Path(local_path).exists():
             self.predict_info_plainTextEdit.appendPlainText(f"ERROR File not found: {local_path}")
@@ -511,7 +516,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         image_flag = os.path.splitext(self.predict_handler_thread.parameter_source)[-1].lower() in IMG_FORMATS
         for item, button in self.button_dict.items():
-            if image_flag and item in ['play_pushButton', 'pause_pushButton']:
+            if image_flag and item == 'pause_pushButton':
                 button.setEnabled(False)
             else:
                 button.setEnabled(True)
@@ -550,8 +555,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.predict_progressBar.setValue(0)
         self.predict_handler_thread.pause_requested = False
         for item, button in self.button_dict.items():
-            if item in ["play_pushButton", "pause_pushButton"] and not image_flag:
+            if item == "import_media_pushButton":
                 button.setEnabled(True)
+            elif item == "pause_pushButton" and not image_flag:
+                button.setEnabled(True)
+                button.setText("Pause")
             else:
                 button.setEnabled(False)
         self.predict_info_plainTextEdit.appendPlainText(f"Start: {source}")
@@ -569,33 +577,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.video_percent_label.setText(str(round((position / self.video_length) * 100, 2)) + '%')
 
     @pyqtSlot()
-    def play_pause_button_click(self):
+    def pause_resume_button_click(self):
         """
-        播放、暂停按钮回调事件
+        Pause/Resume detection while thread is running.
         :return:
         """
-        name = self.sender().objectName()
-
         if self.predict_handler_thread.isRunning():
-            if name == "pause_pushButton":
+            if not self.predict_handler_thread.pause_requested:
                 self.predict_handler_thread.pause_requested = True
+                self.pause_pushButton.setText("Resume")
                 self.predict_info_plainTextEdit.appendPlainText("INFO Detection paused.")
-            elif name == "play_pushButton":
+            else:
                 self.predict_handler_thread.pause_requested = False
+                self.pause_pushButton.setText("Pause")
                 self.predict_info_plainTextEdit.appendPlainText("INFO Detection resumed.")
             return
 
-        if not self.media_source:
-            return
-
-        if name == "play_pushButton":
-            print("play")
-            self.input_player.play()
-            self.output_player.play()
-
-        elif name == "pause_pushButton":
-            self.input_player.pause()
-            self.output_player.pause()
+        self.predict_info_plainTextEdit.appendPlainText("INFO Detection is not running.")
 
     @pyqtSlot()
     def open_file_in_browser(self):
