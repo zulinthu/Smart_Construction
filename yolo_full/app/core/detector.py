@@ -4,12 +4,22 @@ YOLOv5 安全帽检测器
 """
 
 import cv2
+import numpy as np
 import torch
 from pathlib import Path
 import sys
 import io
 import importlib
 from typing import Any, cast
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    _PIL_AVAILABLE = True
+except Exception:  # pragma: no cover
+    Image = None
+    ImageDraw = None
+    ImageFont = None
+    _PIL_AVAILABLE = False
 
 # 兼容Windows控制台默认GBK编码，避免Unicode日志输出报错
 if sys.platform == "win32":
@@ -56,6 +66,7 @@ class HelmetDetector:
         self.img_size = img_size
         self.conf_threshold = CONF_THRESHOLD
         self.iou_threshold = IOU_THRESHOLD
+        self._label_font = self._load_label_font(20)
 
         # 加载模型
         self.model: Any = self._load_model(weights_path)
@@ -65,6 +76,73 @@ class HelmetDetector:
         print(f"  - 图像尺寸: {self.img_size}")
         print(f"  - 置信度阈值: {self.conf_threshold}")
         print(f"  - IoU阈值: {self.iou_threshold}")
+
+
+    @staticmethod
+    def _contains_non_ascii(text: str) -> bool:
+        return any(ord(ch) > 127 for ch in str(text))
+
+    @staticmethod
+    def _load_label_font(size: int):
+        if not _PIL_AVAILABLE:
+            return None
+
+        candidates = [
+            Path("C:/Windows/Fonts/msyh.ttc"),
+            Path("C:/Windows/Fonts/simhei.ttf"),
+            Path("C:/Windows/Fonts/msyhbd.ttc"),
+        ]
+        for font_path in candidates:
+            if font_path.exists():
+                try:
+                    return ImageFont.truetype(str(font_path), size=size)
+                except Exception:
+                    continue
+
+        try:
+            return ImageFont.load_default()
+        except Exception:
+            return None
+
+    def _draw_label(self, image, bbox, label, color):
+        x1, y1 = int(bbox[0]), int(bbox[1])
+
+        if self._contains_non_ascii(label) and _PIL_AVAILABLE and self._label_font is not None:
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            pil_img = Image.fromarray(image_rgb)
+            draw = ImageDraw.Draw(pil_img)
+            if hasattr(draw, "textbbox"):
+                l, t, r, b = draw.textbbox((0, 0), label, font=self._label_font)
+                label_w, label_h = r - l, b - t
+            else:
+                label_w, label_h = draw.textsize(label, font=self._label_font)
+
+            bg_x1 = max(0, x1)
+            bg_y1 = max(0, y1 - label_h - 10)
+            bg_x2 = bg_x1 + label_w + 6
+            bg_y2 = bg_y1 + label_h + 6
+            draw.rectangle((bg_x1, bg_y1, bg_x2, bg_y2), fill=(int(color[2]), int(color[1]), int(color[0])))
+            draw.text((bg_x1 + 3, bg_y1 + 3), label, font=self._label_font, fill=(255, 255, 255))
+            return cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
+
+        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        cv2.rectangle(
+            image,
+            (x1, max(0, y1 - label_h - 10)),
+            (x1 + label_w, y1),
+            color,
+            -1,
+        )
+        cv2.putText(
+            image,
+            label,
+            (x1, max(0, y1 - 5)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            1,
+        )
+        return image
 
     def _get_device(self, device):
         """Get compute device (GPU-only)."""
