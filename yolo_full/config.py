@@ -50,9 +50,9 @@ CLASS_COLORS = {
 
 # 类别中文名称
 CLASS_NAMES_ZH = {
-    'wearing_helmet': '佩戴安全帽',
-    'no_helmet': '未佩戴安全帽',
-    'person': '人员'
+    'wearing_helmet': 'Wearing Helmet',
+    'no_helmet': 'No Helmet',
+    'person': 'Person'
 }
 
 NUM_CLASSES = len(CLASS_NAMES)

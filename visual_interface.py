@@ -171,7 +171,7 @@ class PredictHandlerThread(QThread):
             self.result_ready_trigger.emit(self.parameter_source, self.output_predict_file, image_flag)
         else:
             if not str(self.predict_model.predict_info).startswith("ERROR"):
-                self.predict_model.predict_info = "ERROR 推理失败或输出文件为空。"
+                self.predict_model.predict_info = "ERROR Inference failed or output file is empty."
         self.predict_data_handler_thread.running = False
 
     def _emit_preview(self, frame, annotated):
@@ -467,10 +467,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         source = self.predict_handler_thread.parameter_source
         if not source:
-            self.predict_info_plainTextEdit.appendPlainText("ERROR 请先导入视频或图片。")
+            self.predict_info_plainTextEdit.appendPlainText("ERROR Please import an image or video first.")
             return
         if not Path(source).exists():
-            self.predict_info_plainTextEdit.appendPlainText(f"ERROR 文件不存在: {source}")
+            self.predict_info_plainTextEdit.appendPlainText(f"ERROR File not found: {source}")
             return
         image_flag = os.path.splitext(source)[-1].lower() in IMG_FORMATS
         if not image_flag:
@@ -479,14 +479,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             cap.release()
             if not ok:
                 self.predict_info_plainTextEdit.appendPlainText(
-                    "ERROR 无法读取该视频。可能是编码不受支持（常见 H.265/HEVC）或文件损坏。"
+                    "ERROR Cannot read this video. The codec may be unsupported (e.g. H.265/HEVC) or the file is corrupted."
                 )
                 self.predict_info_plainTextEdit.appendPlainText(
-                    "建议：先转码为 H.264/AAC 的 MP4 再导入。"
+                    "TIP: Transcode to MP4 (H.264/AAC) and import again."
                 )
                 return
         if self.predict_handler_thread.isRunning():
-            self.predict_info_plainTextEdit.appendPlainText("INFO 正在推理中，请稍候。")
+            self.predict_info_plainTextEdit.appendPlainText("INFO Inference is already running, please wait.")
             return
 
         self.predict_progressBar.setValue(0)

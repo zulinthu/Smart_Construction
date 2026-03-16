@@ -48,6 +48,11 @@ CONF_THRESHOLD = config.CONF_THRESHOLD
 IOU_THRESHOLD = config.IOU_THRESHOLD
 CLASS_COLORS = config.CLASS_COLORS
 CLASS_NAMES_ZH = config.CLASS_NAMES_ZH
+CLASS_NAMES_EN = {
+    "wearing_helmet": "Wearing Helmet",
+    "no_helmet": "No Helmet",
+    "person": "Person",
+}
 
 
 class HelmetDetector:
@@ -493,8 +498,8 @@ class HelmetDetector:
             cv2.rectangle(image, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
 
             # 准备标签文本（中文）
-            label_zh = CLASS_NAMES_ZH.get(class_name, class_name)
-            label = f"{label_zh}: {confidence:.2f}"
+            label_en = CLASS_NAMES_EN.get(class_name, class_name.replace("_", " ").title())
+            label = f"{label_en}: {confidence:.2f}"
 
             # 绘制标签背景
             image = self._draw_label(image, bbox, label, color)

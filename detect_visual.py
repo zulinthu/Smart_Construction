@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import cv2
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 
 from yolo_full_adapter import (
@@ -31,22 +32,24 @@ class YOLOPredict(object):
 
     @staticmethod
     def show_real_time_image(image_label, img):
-        image_label_width = image_label.width()
-        resize_factor = image_label_width / img.shape[1]
-        img = cv2.resize(
-            img,
-            (int(img.shape[1] * resize_factor), int(img.shape[0] * resize_factor)),
-            interpolation=cv2.INTER_CUBIC,
-        )
+        if img is None or img.size == 0:
+            return
+
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        image = QImage(
-            img_rgb[:],
-            img_rgb.shape[1],
-            img_rgb.shape[0],
-            img_rgb.shape[1] * 3,
-            QImage.Format_RGB888,
-        )
-        image_label.setPixmap(QPixmap(image))
+        height, width = img_rgb.shape[:2]
+        q_image = QImage(img_rgb.data, width, height, width * 3, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_image)
+
+        target_size = image_label.size()
+        if target_size.width() > 0 and target_size.height() > 0:
+            pixmap = pixmap.scaled(
+                target_size,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+
+        image_label.setAlignment(Qt.AlignCenter)
+        image_label.setPixmap(pixmap)
 
     def detect(self, source, save_img=False, qt_input=None, qt_output=None, frame_callback=None):
         output_dir = Path(self.output)
