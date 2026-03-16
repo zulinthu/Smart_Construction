@@ -27,6 +27,7 @@ import os
 import time
 import sys
 from pathlib import Path
+import cv2
 from GPUtil import GPUtil
 from PyQt5.QtCore import QThread, pyqtSignal, QUrl, pyqtSlot, QTimer, QDateTime, Qt
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
@@ -168,7 +169,7 @@ class PredictHandlerThread(QThread):
                 )
         except Exception as e:
             self.output_predict_file = ""
-            self.predict_model.predict_info = f"ERROR {e}"
+            self.predict_model.predict_info = f"ERROR {type(e).__name__}: {e}"
         finally:
             self.running = False
 
@@ -185,7 +186,8 @@ class PredictHandlerThread(QThread):
             self.output_tab.setCurrentIndex(PREDICT_SHOW_TAB_INDEX)
 
         else:
-            self.predict_model.predict_info = "ERROR 推理失败，请检查视频路径/格式或查看控制台报错。"
+            if not str(self.predict_model.predict_info).startswith("ERROR"):
+                self.predict_model.predict_info = "ERROR 推理失败，请检查视频路径/格式或查看控制台报错。"
 
         # video_flag = os.path.splitext(self.parameter_source)[-1].lower() in vid_formats
         for item, button in self.button_dict.items():
@@ -450,6 +452,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not Path(source).exists():
             self.predict_info_plainTextEdit.appendPlainText(f"ERROR 文件不存在: {source}")
             return
+        image_flag = os.path.splitext(source)[-1].lower() in img_formats
+        if not image_flag:
+            cap = cv2.VideoCapture(source)
+            ok = cap.isOpened()
+            cap.release()
+            if not ok:
+                self.predict_info_plainTextEdit.appendPlainText(
+                    "ERROR 无法读取该视频。可能是编码不受支持（常见 H.265/HEVC）或文件损坏。"
+                )
+                self.predict_info_plainTextEdit.appendPlainText(
+                    "建议：先转码为 H.264/AAC 的 MP4 再导入。"
+                )
+                return
         if self.predict_handler_thread.isRunning():
             self.predict_info_plainTextEdit.appendPlainText("INFO 正在推理中，请稍候。")
             return
