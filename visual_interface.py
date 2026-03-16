@@ -548,6 +548,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         self.predict_progressBar.setValue(0)
+        self.predict_handler_thread.pause_requested = False
         for item, button in self.button_dict.items():
             if item in ["play_pushButton", "pause_pushButton"] and not image_flag:
                 button.setEnabled(True)

@@ -90,9 +90,11 @@ class YOLOPredict(object):
         if _is_video_source(source):
             source_name = Path(source).name
             save_path = str(output_dir / source_name)
+            allow_pause = False
             for idx, total, frame, annotated, fps in runner.run_video(source, save_img=True):
-                while callable(should_pause) and should_pause():
-                    time.sleep(0.05)
+                if allow_pause:
+                    while callable(should_pause) and should_pause():
+                        time.sleep(0.05)
                 infer_t = (1.0 / fps) if fps > 0 else 0
                 self.predict_info = f"video [{idx}/{total}] Done. ({infer_t:.3f}s)"
                 if frame_callback is not None:
@@ -101,17 +103,20 @@ class YOLOPredict(object):
                     # Backward compatibility for legacy callers
                     self.show_real_time_image(qt_input, frame)
                     self.show_real_time_image(qt_output, annotated)
+                allow_pause = True
             self.predict_info = "Done."
             return save_path
 
         if _is_webcam_source(source) or _is_stream_source(source):
             camera_id = int(source) if _is_webcam_source(source) else 0
             save_path = str(output_dir / "camera_output.mp4")
+            allow_pause = False
             for idx, total, frame, annotated, fps in runner.run_camera(
                 camera_id=camera_id, save_img=save_img
             ):
-                while callable(should_pause) and should_pause():
-                    time.sleep(0.05)
+                if allow_pause:
+                    while callable(should_pause) and should_pause():
+                        time.sleep(0.05)
                 infer_t = (1.0 / fps) if fps > 0 else 0
                 self.predict_info = f"video [{idx}/{idx + 1}] Done. ({infer_t:.3f}s)"
                 if frame_callback is not None:
@@ -120,6 +125,7 @@ class YOLOPredict(object):
                     # Backward compatibility for legacy callers
                     self.show_real_time_image(qt_input, frame)
                     self.show_real_time_image(qt_output, annotated)
+                allow_pause = True
             self.predict_info = "Done."
             return save_path
 
