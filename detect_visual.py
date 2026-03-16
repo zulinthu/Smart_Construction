@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from pathlib import Path
+import time
 
 import cv2
 import numpy as np
@@ -58,7 +59,15 @@ class YOLOPredict(object):
         image_label.setAlignment(Qt.AlignCenter)
         image_label.setPixmap(pixmap)
 
-    def detect(self, source, save_img=False, qt_input=None, qt_output=None, frame_callback=None):
+    def detect(
+        self,
+        source,
+        save_img=False,
+        qt_input=None,
+        qt_output=None,
+        frame_callback=None,
+        should_pause=None,
+    ):
         output_dir = Path(self.output)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -82,6 +91,8 @@ class YOLOPredict(object):
             source_name = Path(source).name
             save_path = str(output_dir / source_name)
             for idx, total, frame, annotated, fps in runner.run_video(source, save_img=True):
+                while callable(should_pause) and should_pause():
+                    time.sleep(0.05)
                 infer_t = (1.0 / fps) if fps > 0 else 0
                 self.predict_info = f"video [{idx}/{total}] Done. ({infer_t:.3f}s)"
                 if frame_callback is not None:
@@ -99,6 +110,8 @@ class YOLOPredict(object):
             for idx, total, frame, annotated, fps in runner.run_camera(
                 camera_id=camera_id, save_img=save_img
             ):
+                while callable(should_pause) and should_pause():
+                    time.sleep(0.05)
                 infer_t = (1.0 / fps) if fps > 0 else 0
                 self.predict_info = f"video [{idx}/{idx + 1}] Done. ({infer_t:.3f}s)"
                 if frame_callback is not None:

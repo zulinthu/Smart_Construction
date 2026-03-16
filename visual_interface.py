@@ -143,6 +143,7 @@ class PredictHandlerThread(QThread):
         self.predict_data_handler_thread.predict_message_trigger.connect(self.add_messages)
         self.preview_emit_interval = 1.0 / 20.0
         self._last_preview_emit_ts = 0.0
+        self.pause_requested = False
 
     def __del__(self):
         self.running = False
@@ -150,6 +151,7 @@ class PredictHandlerThread(QThread):
 
     def run(self):
         self.running = True
+        self.pause_requested = False
         self.output_predict_file = ""
         if not self.predict_data_handler_thread.isRunning():
             self.predict_data_handler_thread.start()
@@ -162,6 +164,7 @@ class PredictHandlerThread(QThread):
                 self.output_predict_file = self.predict_model.detect(
                     self.parameter_source,
                     frame_callback=frame_callback,
+                    should_pause=self._should_pause,
                 )
         except Exception as e:
             self.output_predict_file = ""
@@ -182,6 +185,9 @@ class PredictHandlerThread(QThread):
             return
         self._last_preview_emit_ts = now
         self.preview_frame_trigger.emit(frame, annotated)
+
+    def _should_pause(self):
+        return self.pause_requested and self.running
 
     @pyqtSlot(str)
     def add_messages(self, message):
@@ -542,8 +548,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         self.predict_progressBar.setValue(0)
-        for _, button in self.button_dict.items():
-            button.setEnabled(False)
+        for item, button in self.button_dict.items():
+            if item in ["play_pushButton", "pause_pushButton"] and not image_flag:
+                button.setEnabled(True)
+            else:
+                button.setEnabled(False)
         self.predict_info_plainTextEdit.appendPlainText(f"Start: {source}")
         # 启动线程去调用
         self.predict_handler_thread.start()
@@ -565,6 +574,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         :return:
         """
         name = self.sender().objectName()
+
+        if self.predict_handler_thread.isRunning():
+            if name == "pause_pushButton":
+                self.predict_handler_thread.pause_requested = True
+                self.predict_info_plainTextEdit.appendPlainText("INFO Detection paused.")
+            elif name == "play_pushButton":
+                self.predict_handler_thread.pause_requested = False
+                self.predict_info_plainTextEdit.appendPlainText("INFO Detection resumed.")
+            return
 
         if not self.media_source:
             return
