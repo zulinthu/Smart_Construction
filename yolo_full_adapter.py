@@ -26,6 +26,10 @@ def _pick_weights_path(weights) -> Optional[str]:
             return str(weights_path)
 
     fallback_candidates = [
+        ROOT_DIR.parent / "deliverables" / "weights" / "best.pt",
+        ROOT_DIR.parent / "submission_bundle" / "weights" / "best.pt",
+        ROOT_DIR / "weights" / "best.pt",
+        YOLO_FULL_DIR / "models" / "weights" / "best.pt",
         YOLO_FULL_DIR / "models" / "weights" / "yolov5x.pt",
         YOLO_FULL_DIR / "models" / "weights" / "yolov5s.pt",
     ]

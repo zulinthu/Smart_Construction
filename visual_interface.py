@@ -31,7 +31,7 @@ import cv2
 from GPUtil import GPUtil
 from PyQt5.QtCore import QThread, pyqtSignal, QUrl, pyqtSlot, QTimer, QDateTime, Qt
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QPushButton
 from PyQt5.QtGui import QColor, QBrush, QIcon, QPixmap
 from PyQt5.QtChart import QDateTimeAxis, QValueAxis, QSplineSeries, QChart
 import torch
@@ -282,6 +282,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.real_time_checkBox.setChecked(real_time_show_predict_flag)
         self.real_time_check_state = self.real_time_checkBox.isChecked()
 
+        # Model selector button (runtime switchable .pt weights)
+        self.select_model_pushButton = QPushButton("Select Model")
+        self.select_model_pushButton.setMinimumSize(0, 25)
+        self.select_model_pushButton.setStyleSheet(self.import_media_pushButton.styleSheet())
+        self.select_model_pushButton.clicked.connect(self.select_model)
+        self.horizontalLayout_13.insertWidget(0, self.select_model_pushButton)
+        self.button_dict.update({"select_model_pushButton": self.select_model_pushButton})
+
     def gen_better_gui(self):
         """
         美化界面
@@ -315,6 +323,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         self.real_time_check_state = self.real_time_checkBox.isChecked()
         self.predict_handler_thread.real_time_show_predict_flag = self.real_time_check_state
+
+    def select_model(self):
+        if self.predict_handler_thread.isRunning():
+            self.predict_info_plainTextEdit.appendPlainText(
+                "INFO Inference is running. Please wait before switching model."
+            )
+            return
+
+        selected_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select model file",
+            str(Path.home()),
+            "PyTorch Model (*.pt);;All Files (*.*)",
+        )
+        if not selected_file:
+            return
+
+        model_path = Path(selected_file).resolve()
+        if not model_path.exists():
+            self.predict_info_plainTextEdit.appendPlainText(f"ERROR Model file not found: {model_path}")
+            return
+
+        self.predict_handler_thread.predict_model.weights = [str(model_path)]
+        self.weight_label.setText(f" Using weight : ****** {model_path.name} ******")
+        self.predict_info_plainTextEdit.appendPlainText(f"Model switched: {model_path}")
 
 
     def _set_buttons_after_predict(self, image_flag: bool, has_output: bool):
@@ -546,22 +579,33 @@ if __name__ == '__main__':
 
     root_dir = Path(__file__).resolve().parent
     os.chdir(root_dir)
-    preferred_weight_dirs = [
-        root_dir.joinpath("weights"),
-        root_dir.joinpath("yolo_full", "models", "weights"),
+    preferred_weight_files = [
+        root_dir.joinpath("weights", "best.pt"),
+        root_dir.parent.joinpath("deliverables", "weights", "best.pt"),
+        root_dir.parent.joinpath("submission_bundle", "weights", "best.pt"),
+        root_dir.joinpath("yolo_full", "models", "weights", "best.pt"),
     ]
-    weight_file = []
-    for weight_dir in preferred_weight_dirs:
-        if weight_dir.exists():
-            weight_file = [item for item in weight_dir.iterdir() if item.suffix == ".pt"]
-            if weight_file:
-                break
-    if not weight_file:
-        raise FileNotFoundError(
-            "No .pt weights found in ./weights or ./yolo_full/models/weights"
-        )
+    selected_weight = next((p for p in preferred_weight_files if p.exists()), None)
 
-    weight_root = [str(weight_file[0])]  # 权重文件位置
+    if selected_weight is None:
+        preferred_weight_dirs = [
+            root_dir.joinpath("weights"),
+            root_dir.joinpath("yolo_full", "models", "weights"),
+        ]
+        weight_file = []
+        for weight_dir in preferred_weight_dirs:
+            if weight_dir.exists():
+                weight_file = [item for item in weight_dir.iterdir() if item.suffix == ".pt"]
+                if weight_file:
+                    break
+        if not weight_file:
+            raise FileNotFoundError(
+                "No .pt weights found in ./weights, ../deliverables/weights, "
+                "../submission_bundle/weights, or ./yolo_full/models/weights"
+            )
+        selected_weight = weight_file[0]
+
+    weight_root = [str(selected_weight)]  # 权重文件位置
     out_file_root = root_dir.joinpath(r'inference/output')
     out_file_root.parent.mkdir(exist_ok=True)
     out_file_root.mkdir(exist_ok=True)
