@@ -37,11 +37,14 @@ from PyQt5.QtChart import QDateTimeAxis, QValueAxis, QSplineSeries, QChart
 import torch
 from UI.main_window import Ui_MainWindow
 from detect_visual import YOLOPredict
-from utils.datasets import img_formats
 
 CODE_VER = "V2.0"
 PREDICT_SHOW_TAB_INDEX = 0
 REAL_TIME_PREDICT_TAB_INDEX = 1
+
+# Avoid importing legacy top-level `utils` package here.
+# It conflicts with torch.hub yolov5 runtime imports.
+IMG_FORMATS = {".bmp", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng", ".webp", ".mpo"}
 
 
 def get_gpu_info():
@@ -149,7 +152,7 @@ class PredictHandlerThread(QThread):
         for item, button in self.button_dict.items():
             button.setEnabled(False)
 
-        image_flag = os.path.splitext(self.parameter_source)[-1].lower() in img_formats
+        image_flag = os.path.splitext(self.parameter_source)[-1].lower() in IMG_FORMATS
         qt_input = None
         qt_output = None
 
@@ -431,7 +434,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.predict_handler_thread.parameter_source = local_path
         self.input_player.pause()  # 显示媒体
 
-        image_flag = os.path.splitext(self.predict_handler_thread.parameter_source)[-1].lower() in img_formats
+        image_flag = os.path.splitext(self.predict_handler_thread.parameter_source)[-1].lower() in IMG_FORMATS
         for item, button in self.button_dict.items():
             if image_flag and item in ['play_pushButton', 'pause_pushButton']:
                 button.setEnabled(False)
@@ -452,7 +455,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not Path(source).exists():
             self.predict_info_plainTextEdit.appendPlainText(f"ERROR 文件不存在: {source}")
             return
-        image_flag = os.path.splitext(source)[-1].lower() in img_formats
+        image_flag = os.path.splitext(source)[-1].lower() in IMG_FORMATS
         if not image_flag:
             cap = cv2.VideoCapture(source)
             ok = cap.isOpened()
