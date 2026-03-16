@@ -66,12 +66,21 @@ class YoloFullRunner:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        device = "cpu" if device == "cpu" else "cuda:0"
+        device = str(device).strip()
+        if device.lower() == "cpu":
+            raise RuntimeError("GPU-only mode is enabled. CPU device is not allowed.")
+        if device.startswith("cuda"):
+            runtime_device = device
+        elif device.isdigit():
+            runtime_device = f"cuda:{device}"
+        else:
+            runtime_device = "cuda:0"
+
         from app.core.detector import HelmetDetector
 
         self.detector = HelmetDetector(
             weights_path=_pick_weights_path(weights),
-            device=device,
+            device=runtime_device,
             img_size=img_size,
         )
         self.detector.set_confidence_threshold(conf_thres)

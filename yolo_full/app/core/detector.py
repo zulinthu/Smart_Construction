@@ -67,12 +67,22 @@ class HelmetDetector:
         print(f"  - IoU阈值: {self.iou_threshold}")
 
     def _get_device(self, device):
-        """获取计算设备"""
-        if device.startswith("cuda") and torch.cuda.is_available():
-            return torch.device(device)
-        else:
-            print("⚠ CUDA不可用，使用CPU")
-            return torch.device("cpu")
+        """Get compute device (GPU-only)."""
+        device = str(device).strip()
+        if not device.startswith("cuda"):
+            raise RuntimeError(
+                f"GPU-only mode is enabled. Invalid device='{device}'. "
+                "Use a CUDA device like 'cuda:0'."
+            )
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "GPU-only mode is enabled, but CUDA is not available.\n"
+                "Check NVIDIA driver / CUDA runtime / PyTorch CUDA build.\n"
+                "Quick checks:\n"
+                "  nvidia-smi\n"
+                "  python -c \"import torch; print(torch.cuda.is_available(), torch.version.cuda)\""
+            )
+        return torch.device(device)
 
     def _load_model(self, weights_path):
         """加载YOLOv5模型"""
